@@ -1,0 +1,5 @@
+.cache
+node_modules
+dist
+elm-stuff
+.DS_Store
