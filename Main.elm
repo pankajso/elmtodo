@@ -7,6 +7,7 @@ import Html.Attributes as HA
 import Html.Events exposing (onClick, onInput)
 import List
 import List.Extra
+import Maybe exposing (withDefault)
 import String exposing (fromInt)
 import Time
 
@@ -44,8 +45,7 @@ type alias MyTaskList =
 
 type alias Model =
     { mytask : MyTaskList
-
-    -- activeTask : MyTask
+    , activeTask : Maybe MyTask
     , task : String
     , estimate : Int
     }
@@ -138,12 +138,46 @@ updateStatus index item =
 --         model
 
 
+getActiveTaskName model =
+    let
+        name =
+            case model.activeTask of
+                Just a ->
+                    a.name
+
+                Nothing ->
+                    ""
+    in
+    name
+
+
+getActiveTaskEstimates model =
+    let
+        name =
+            case model.activeTask of
+                Just a ->
+                    a.estimate
+
+                Nothing ->
+                    0
+    in
+    name
+
+
 init : ( Model, Cmd Msg )
 init =
-    ( { mytask = [ { id = 1, status = Pause, name = "T1", estimate = 30, actual = 0 } ]
-      , task = ""
-      , estimate = 30
-      }
+    let
+        newTask =
+            { id = 1, status = Pause, name = "T1", estimate = 30, actual = 0 }
+
+        newModel =
+            { mytask = newTask :: []
+            , task = ""
+            , estimate = 30
+            , activeTask = Just newTask
+            }
+    in
+    ( newModel
     , Cmd.none
     )
 
@@ -187,7 +221,7 @@ update message model =
                 -- getMaxid .id model.mytask
                 newModel =
                     { model
-                        | mytask = model.mytask ++ [ { id = nextid + 1, status = Start, name = model.task, estimate = model.estimate, actual = 0 } ]
+                        | mytask = model.mytask ++ [ { id = nextid + 1, status = Pause, name = getActiveTaskName model, estimate = getActiveTaskEstimates model, actual = 0 } ]
                         , task = ""
                         , estimate = 30
                     }
@@ -196,19 +230,45 @@ update message model =
 
         ChangeTask newTask ->
             let
+                oldActive =
+                    model.activeTask
+
+                newActive =
+                    case oldActive of
+                        Just a ->
+                            { a | name = newTask }
+
+                        Nothing ->
+                            let
+                                nextid =
+                                    List.map (\task -> task.id) model.mytask |> List.maximum |> Maybe.withDefault 1
+                            in
+                            { id = nextid + 1, status = Pause, name = newTask, estimate = 30, actual = 0 }
+
                 newModel =
-                    { model
-                        | task = newTask
-                    }
+                    { model | activeTask = Just newActive }
             in
             ( newModel, Cmd.none )
 
         ChangeEstimate newEstimate ->
             let
+                oldActive =
+                    model.activeTask
+
+                newActive =
+                    case oldActive of
+                        Just a ->
+                            { a | estimate = String.toInt newEstimate |> Maybe.withDefault 0 }
+
+                        Nothing ->
+                            let
+                                nextid =
+                                    List.map (\task -> task.id) model.mytask |> List.maximum |> Maybe.withDefault 1
+                            in
+                            { id = nextid + 1, status = Pause, name = "", estimate = String.toInt newEstimate |> Maybe.withDefault 0, actual = 0 }
+
                 newModel =
-                    { model
-                        | estimate = String.toInt newEstimate |> Maybe.withDefault 0
-                    }
+                    { model | activeTask = Just newActive }
             in
             ( newModel, Cmd.none )
 
@@ -260,12 +320,12 @@ view model =
         , Html.div []
             [ Html.input
                 [ HA.placeholder "Enter taks here"
-                , HA.value model.task
+                , HA.value (getActiveTaskName model)
                 , onInput ChangeTask
                 ]
                 []
             , Html.input
-                [ HA.value (String.fromInt model.estimate)
+                [ HA.value (String.fromInt (getActiveTaskEstimates model))
                 , onInput ChangeEstimate
                 ]
                 []
