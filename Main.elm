@@ -164,6 +164,10 @@ getActiveTaskEstimates model =
     name
 
 
+getMaxid model =
+    List.map (\task -> task.id) model.mytask |> List.maximum |> Maybe.withDefault 1
+
+
 init : ( Model, Cmd Msg )
 init =
     let
@@ -206,7 +210,7 @@ update message model =
             let
                 nextid =
                     -- newid =
-                    List.map (\task -> task.id) model.mytask |> List.maximum |> Maybe.withDefault 1
+                    getMaxid model
 
                 -- List.Extra.maximumBy .id model.mytask
                 --     |> Maybe.map (\task -> task.id)
@@ -241,7 +245,7 @@ update message model =
                         Nothing ->
                             let
                                 nextid =
-                                    List.map (\task -> task.id) model.mytask |> List.maximum |> Maybe.withDefault 1
+                                    getMaxid model
                             in
                             { id = nextid + 1, status = Pause, name = newTask, estimate = 30, actual = 0 }
 
@@ -263,7 +267,7 @@ update message model =
                         Nothing ->
                             let
                                 nextid =
-                                    List.map (\task -> task.id) model.mytask |> List.maximum |> Maybe.withDefault 1
+                                    getMaxid model
                             in
                             { id = nextid + 1, status = Pause, name = "", estimate = String.toInt newEstimate |> Maybe.withDefault 0, actual = 0 }
 
