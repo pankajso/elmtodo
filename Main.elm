@@ -8,6 +8,7 @@ import Html.Events exposing (onClick, onInput)
 import List
 import List.Extra
 import String exposing (fromInt)
+import Time
 
 
 
@@ -43,6 +44,8 @@ type alias MyTaskList =
 
 type alias Model =
     { mytask : MyTaskList
+
+    -- activeTask : MyTask
     , task : String
     , estimate : Int
     }
@@ -151,6 +154,7 @@ type Msg
     | ChangeTask String
     | ChangeEstimate String
     | TaskToggle Int
+    | UpdateTask Time.Posix
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -166,22 +170,24 @@ update message model =
         -- [id = 2, name = model.task, estimate = model.estimate, actual = 0]
         AddTask ->
             let
-                -- taks =
-                newid =
-                    List.Extra.maximumBy .id model.mytask
-
                 nextid =
-                    case newid of
-                        Just a ->
-                            a.id
+                    -- newid =
+                    List.map (\task -> task.id) model.mytask |> List.maximum |> Maybe.withDefault 1
 
-                        Nothing ->
-                            1
-
+                -- List.Extra.maximumBy .id model.mytask
+                --     |> Maybe.map (\task -> task.id)
+                --     |> Maybe.withDefault 1
+                -- nextid =
+                --     case newid of
+                --         Just a ->
+                --             a.id
+                --
+                --         Nothing ->
+                --             1
                 -- getMaxid .id model.mytask
                 newModel =
                     { model
-                        | mytask = model.mytask ++ [ { id = nextid + 1, status = Pause, name = model.task, estimate = model.estimate, actual = 0 } ]
+                        | mytask = model.mytask ++ [ { id = nextid + 1, status = Start, name = model.task, estimate = model.estimate, actual = 0 } ]
                         , task = ""
                         , estimate = 30
                     }
@@ -201,7 +207,7 @@ update message model =
             let
                 newModel =
                     { model
-                        | estimate = Maybe.withDefault 0 (String.toInt newEstimate)
+                        | estimate = String.toInt newEstimate |> Maybe.withDefault 0
                     }
             in
             ( newModel, Cmd.none )
@@ -221,6 +227,20 @@ update message model =
             in
             ( newModel, Cmd.none )
 
+        UpdateTask time ->
+            let
+                increaseActual t =
+                    { t
+                        | actual =
+                            if t.status == Start then
+                                t.actual + 1
+
+                            else
+                                t.actual
+                    }
+            in
+            ( { model | mytask = List.map increaseActual model.mytask }, Cmd.none )
+
 
 
 ---- VIEW ----
@@ -234,6 +254,7 @@ view model =
             , Html.th [] [ Html.text "Number" ]
             , Html.th [] [ Html.text "Task" ]
             , Html.th [] [ Html.text "Estimate" ]
+            , Html.th [] [ Html.text "Actual" ]
             , myTasksView model.mytask
             ]
         , Html.div []
@@ -281,6 +302,7 @@ taskView mytask =
                 ]
             ]
         , Html.td [] [ Html.text (String.fromInt mytask.estimate) ]
+        , Html.td [] [ Html.text (String.fromInt mytask.actual) ]
         ]
 
 
@@ -291,11 +313,22 @@ myTasksView mytasks =
         ]
 
 
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    Time.every 600 UpdateTask
+
+
+
+-- Sub.none
+
+
 main : Program () Model Msg
 main =
     Browser.element
         { init = always init
         , update = update
-        , subscriptions = always Sub.none
+
+        -- , subscriptions = always Sub.none
+        , subscriptions = subscriptions
         , view = view
         }
