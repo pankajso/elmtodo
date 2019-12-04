@@ -30,8 +30,12 @@ type TaskStatus
     | Complete
 
 
+type alias Id =
+    Int
+
+
 type alias MyTask =
-    { id : Int
+    { id : Id
     , status : TaskStatus
     , name : String
     , estimate : Int
@@ -44,14 +48,23 @@ type alias MyTaskList =
 
 
 type alias Model =
-    { mytask : MyTaskList
-    , activeTask : Maybe MyTask
-    , task : String
-    , estimate : Int
+    { mytasks : MyTaskList
+    , activeTask : Maybe Id
+    , newTaskName : String
+    , newTaskEstimate : Int
     }
 
 
 
+--
+-- Update name
+--   activeTask == Nothing
+--     initMyTask ++ mytasks
+--   activeTask == Just id
+--     mytasks.id == id (\task -> {task|name = name})
+--
+-- Add name estimate
+--   initMyTask ++ mytasks
 -- getidList : MyTask -> List Int
 -- getidList mytask =
 --     let
@@ -91,19 +104,42 @@ type alias Model =
 --     List.head << List.reverse << List.sortBy field
 
 
-updateStatus index item =
+getactiveTaskid model =
+    let
+        id =
+            case model.activeTask of
+                Maybe.Just a ->
+                    a
+
+                Nothing ->
+                    0
+    in
+    id
+
+
+toggleTask status =
+    case status of
+        Pause ->
+            Start
+
+        Start ->
+            Pause
+
+        Complete ->
+            Start
+
+
+updateStatus index activetaskId item =
     if index == item.id then
         { item
             | status =
-                case item.status of
-                    Pause ->
-                        Start
+                toggleTask item.status
+        }
 
-                    Start ->
-                        Pause
-
-                    Complete ->
-                        Start
+    else if item.id == activetaskId then
+        { item
+            | status =
+                toggleTask Start
         }
 
     else
@@ -111,6 +147,32 @@ updateStatus index item =
 
 
 
+-- Tasks
+-- for each task if task id is passed id then toggle task status
+-- if active task id is not task id then set active task to this task id
+-- if active task id is task id then set active task to none
+--
+-- NameChange
+-- let
+--     oldActive =
+--         model.activeTask
+--
+--     newActive =
+--         case oldActive of
+--             Just a ->
+--                 { a | name = name }
+--
+--             Nothing ->
+--                 let
+--                     nextid =
+--                         getMaxid model
+--                 in
+--                 { id = nextid + 1, status = Pause, name = name, estimate = 30, actual = 0 }
+--
+--     newModel =
+--         { model | activeTask = Just newActive.id }
+-- in
+-- ( newModel, Cmd.none )
 -- updateStatus tasklst =
 --     task.id
 -- updateStaus model id =
@@ -143,10 +205,10 @@ getActiveTaskName model =
         name =
             case model.activeTask of
                 Just a ->
-                    a.name
+                    a
 
                 Nothing ->
-                    ""
+                    Maybe.Nothing
     in
     name
 
@@ -165,7 +227,7 @@ getActiveTaskEstimates model =
 
 
 getMaxid model =
-    List.map (\task -> task.id) model.mytask |> List.maximum |> Maybe.withDefault 1
+    List.map (\task -> task.id) model.mytasks |> List.maximum |> Maybe.withDefault 1
 
 
 init : ( Model, Cmd Msg )
@@ -175,10 +237,10 @@ init =
             { id = 1, status = Pause, name = "T1", estimate = 30, actual = 0 }
 
         newModel =
-            { mytask = newTask :: []
-            , task = ""
-            , estimate = 30
-            , activeTask = Just newTask
+            { mytasks = newTask :: []
+            , newTaskName = ""
+            , newTaskEstimate = 30
+            , activeTask = Just newTask.id
             }
     in
     ( newModel
@@ -189,8 +251,8 @@ init =
 type Msg
     = None
     | AddTask
-    | ChangeTask String
-    | ChangeEstimate String
+    | OnName String
+    | OnEstimate String
     | TaskToggle Int
     | UpdateTask Time.Posix
 
@@ -225,54 +287,27 @@ update message model =
                 -- getMaxid .id model.mytask
                 newModel =
                     { model
-                        | mytask = model.mytask ++ [ { id = nextid + 1, status = Pause, name = getActiveTaskName model, estimate = getActiveTaskEstimates model, actual = 0 } ]
-                        , task = ""
-                        , estimate = 30
+                        | mytasks = model.mytasks ++ [ { id = nextid + 1, status = Pause, name = model.newTaskName, estimate = model.newTaskEstimate, actual = 0 } ]
+                        , newTaskName = ""
+                        , newTaskEstimate = 30
+                        , activeTask = model.activeTask
                     }
             in
             ( newModel, Cmd.none )
 
-        ChangeTask newTask ->
+        OnName name ->
             let
-                oldActive =
-                    model.activeTask
-
-                newActive =
-                    case oldActive of
-                        Just a ->
-                            { a | name = newTask }
-
-                        Nothing ->
-                            let
-                                nextid =
-                                    getMaxid model
-                            in
-                            { id = nextid + 1, status = Pause, name = newTask, estimate = 30, actual = 0 }
-
                 newModel =
-                    { model | activeTask = Just newActive }
+                    { model
+                        | newTaskName = name
+                    }
             in
             ( newModel, Cmd.none )
 
-        ChangeEstimate newEstimate ->
+        OnEstimate newEstimate ->
             let
-                oldActive =
-                    model.activeTask
-
-                newActive =
-                    case oldActive of
-                        Just a ->
-                            { a | estimate = String.toInt newEstimate |> Maybe.withDefault 0 }
-
-                        Nothing ->
-                            let
-                                nextid =
-                                    getMaxid model
-                            in
-                            { id = nextid + 1, status = Pause, name = "", estimate = String.toInt newEstimate |> Maybe.withDefault 0, actual = 0 }
-
                 newModel =
-                    { model | activeTask = Just newActive }
+                    { model | newTaskEstimate = String.toInt newEstimate |> Maybe.withDefault 0 }
             in
             ( newModel, Cmd.none )
 
@@ -280,13 +315,17 @@ update message model =
             let
                 status =
                     -- updateStaus model id
-                    List.map (updateStatus id)
-                        model.mytask
+                    List.map (updateStatus id (getactiveTaskid model))
+                        model.mytasks
 
+                -- status =
+                --     List.map (setActiveTaskid id)
+                --         model.mytasks
                 newModel =
                     { model
-                        | mytask =
+                        | mytasks =
                             status
+                        , activeTask = Just id
                     }
             in
             ( newModel, Cmd.none )
@@ -303,7 +342,7 @@ update message model =
                                 t.actual
                     }
             in
-            ( { model | mytask = List.map increaseActual model.mytask }, Cmd.none )
+            ( { model | mytasks = List.map increaseActual model.mytasks }, Cmd.none )
 
 
 
@@ -319,23 +358,23 @@ view model =
             , Html.th [] [ Html.text "Task" ]
             , Html.th [] [ Html.text "Estimate" ]
             , Html.th [] [ Html.text "Actual" ]
-            , myTasksView model.mytask
+            , myTasksView model.mytasks
             ]
         , Html.div []
             [ Html.input
                 [ HA.placeholder "Enter taks here"
-                , HA.value (getActiveTaskName model)
-                , onInput ChangeTask
+                , HA.value model.newTaskName
+                , onInput OnName
                 ]
                 []
             , Html.input
-                [ HA.value (String.fromInt (getActiveTaskEstimates model))
-                , onInput ChangeEstimate
+                [ HA.value (String.fromInt model.newTaskEstimate)
+                , onInput OnEstimate
                 ]
                 []
             ]
         , Html.div []
-            [ Html.text model.task
+            [ Html.text model.newTaskName
             ]
         , Html.div []
             [ button [ onClick AddTask ] [ Html.text "Add Task" ]
