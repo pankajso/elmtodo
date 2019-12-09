@@ -5,10 +5,7 @@ import Browser.Navigation
 import Html exposing (Html, button)
 import Html.Attributes as HA
 import Html.Events exposing (onClick, onInput)
-import List
 import List.Extra
-import Maybe exposing (withDefault)
-import String exposing (fromInt)
 import Time
 
 
@@ -30,8 +27,18 @@ type TaskStatus
     | Complete
 
 
-type alias Id =
-    Int
+type Id
+    = TaskId Int
+
+
+toId : Int -> Id
+toId x =
+    TaskId x
+
+
+idToInt : Id -> Int
+idToInt (TaskId x) =
+    x
 
 
 type alias MyTask =
@@ -104,19 +111,26 @@ type alias Model =
 --     List.head << List.reverse << List.sortBy field
 
 
+getactiveTaskid : Model -> Id
 getactiveTaskid model =
-    let
-        id =
-            case model.activeTask of
-                Maybe.Just a ->
-                    a
-
-                Nothing ->
-                    0
-    in
-    id
+    model.activeTask
+        |> Maybe.withDefault (toId 0)
 
 
+
+-- let
+--     id =
+--         case model.activeTask of
+--             Maybe.Just a ->
+--                 a
+--
+--             Nothing ->
+--                 0
+-- in
+-- id
+
+
+toggleTask : TaskStatus -> TaskStatus
 toggleTask status =
     case status of
         Pause ->
@@ -129,6 +143,11 @@ toggleTask status =
             Start
 
 
+updateStatus :
+    a
+    -> a
+    -> { b | id : a, status : TaskStatus }
+    -> { b | id : a, status : TaskStatus }
 updateStatus index activetaskId item =
     if index == item.id then
         { item
@@ -198,43 +217,24 @@ updateStatus index activetaskId item =
 --
 --     else
 --         model
+-- getActiveTaskName : Model -> Maybe.Maybe a
+-- getActiveTaskName : Model -> Maybe.Maybe Id
 
 
-getActiveTaskName model =
-    let
-        name =
-            case model.activeTask of
-                Just a ->
-                    a
-
-                Nothing ->
-                    Maybe.Nothing
-    in
-    name
-
-
-getActiveTaskEstimates model =
-    let
-        name =
-            case model.activeTask of
-                Just a ->
-                    a.estimate
-
-                Nothing ->
-                    0
-    in
-    name
-
-
-getMaxid model =
-    List.map (\task -> task.id) model.mytasks |> List.maximum |> Maybe.withDefault 1
+getNextid : Model -> Id
+getNextid model =
+    List.map (\task -> idToInt task.id) model.mytasks
+        |> List.maximum
+        |> Maybe.withDefault 0
+        |> (+) 1
+        |> toId
 
 
 init : ( Model, Cmd Msg )
 init =
     let
         newTask =
-            { id = 1, status = Pause, name = "T1", estimate = 30, actual = 0 }
+            { id = toId 1, status = Pause, name = "T1", estimate = 30, actual = 0 }
 
         newModel =
             { mytasks = newTask :: []
@@ -272,7 +272,7 @@ update message model =
             let
                 nextid =
                     -- newid =
-                    getMaxid model
+                    getNextid model
 
                 -- List.Extra.maximumBy .id model.mytask
                 --     |> Maybe.map (\task -> task.id)
@@ -287,7 +287,7 @@ update message model =
                 -- getMaxid .id model.mytask
                 newModel =
                     { model
-                        | mytasks = model.mytasks ++ [ { id = nextid + 1, status = Pause, name = model.newTaskName, estimate = model.newTaskEstimate, actual = 0 } ]
+                        | mytasks = model.mytasks ++ [ { id = nextid, status = Pause, name = model.newTaskName, estimate = model.newTaskEstimate, actual = 0 } ]
                         , newTaskName = ""
                         , newTaskEstimate = 30
                         , activeTask = model.activeTask
@@ -315,7 +315,7 @@ update message model =
             let
                 status =
                     -- updateStaus model id
-                    List.map (updateStatus id (getactiveTaskid model))
+                    List.map (updateStatus (toId id) (getactiveTaskid model))
                         model.mytasks
 
                 -- status =
@@ -325,7 +325,7 @@ update message model =
                     { model
                         | mytasks =
                             status
-                        , activeTask = Just id
+                        , activeTask = Just (toId id)
                     }
             in
             ( newModel, Cmd.none )
@@ -391,10 +391,10 @@ view model =
 taskView : MyTask -> Html Msg
 taskView mytask =
     Html.tr []
-        [ Html.td [] [ Html.text (String.fromInt mytask.id) ]
+        [ Html.td [] [ Html.text (String.fromInt (idToInt mytask.id)) ]
         , Html.td [] [ Html.text mytask.name ]
         , Html.td []
-            [ Html.button [ onClick (TaskToggle mytask.id) ]
+            [ Html.button [ onClick (TaskToggle (idToInt mytask.id)) ]
                 [ Html.text
                     (if not (mytask.status == Start) then
                         "Start"
