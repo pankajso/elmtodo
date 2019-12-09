@@ -50,12 +50,8 @@ type alias MyTask =
     }
 
 
-type alias MyTaskList =
-    List MyTask
-
-
 type alias Model =
-    { mytasks : MyTaskList
+    { mytasks : List MyTask
     , activeTask : Maybe Id
     , newTaskName : String
     , newTaskEstimate : Int
@@ -353,12 +349,16 @@ view : Model -> Html Msg
 view model =
     Html.div []
         [ Html.div []
-            [ Html.table [] []
-            , Html.th [] [ Html.text "Number" ]
-            , Html.th [] [ Html.text "Task" ]
-            , Html.th [] [ Html.text "Estimate" ]
-            , Html.th [] [ Html.text "Actual" ]
-            , myTasksView model.mytasks
+            [ Html.table []
+                ([ Html.tr []
+                    [ Html.th [] [ Html.text "Number" ]
+                    , Html.th [] [ Html.text "Task" ]
+                    , Html.th [] [ Html.text "Estimate" ]
+                    , Html.th [] [ Html.text "Actual" ]
+                    ]
+                 ]
+                    ++ myTasksView model.mytasks
+                )
             ]
         , Html.div []
             [ Html.input
@@ -409,11 +409,9 @@ taskView mytask =
         ]
 
 
-myTasksView : List MyTask -> Html Msg
+myTasksView : List MyTask -> List (Html Msg)
 myTasksView mytasks =
-    Html.div []
-        [ Html.div [] (List.map taskView mytasks)
-        ]
+    List.map taskView mytasks
 
 
 subscriptions : Model -> Sub Msg
