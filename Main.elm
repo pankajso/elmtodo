@@ -6,8 +6,10 @@ import Html exposing (Html, button)
 import Html.Attributes as HA
 import Html.Events exposing (onClick, onInput)
 import Json.Decode as Decode exposing (..)
+import Json.Decode.Pipeline exposing (optional, required)
 import Json.Encode as Encode exposing (..)
 import List.Extra
+import Ports exposing (..)
 import Time
 
 
@@ -43,6 +45,12 @@ idToInt (TaskId x) =
     x
 
 
+type alias Error =
+    { error : String
+    , errorDescription : String
+    }
+
+
 type alias MyTask =
     { id : Id
     , status : TaskStatus
@@ -60,72 +68,10 @@ type alias Model =
     }
 
 
-
---
--- Update name
---   activeTask == Nothing
---     initMyTask ++ mytasks
---   activeTask == Just id
---     mytasks.id == id (\task -> {task|name = name})
---
--- Add name estimate
---   initMyTask ++ mytasks
--- getidList : MyTask -> List Int
--- getidList mytask =
---     let
---         id =
---             mytask.id
---     in
---     id :: idList
--- getMaxid : List MyTask -> List Int -> List Int
--- getMaxid mytask =
---     let
---         emptylist =
---             []
---
---         idList =
---             List.map getidList mytask
---     in
---     List.maximum idList
--- getMaxid : (a -> comparable) -> List a -> Maybe a
--- getMaxid : (a -> comparable) -> Int
--- getMaxid id =
---     let
---         f x acc =
---             case acc of
---                 Nothing ->
---                     Just x
---
---                 Just y ->
---                     if id x > id y then
---                         Just x.id
---
---                     else
---                         Just y.id
---     in
---     List.foldr f Nothing
--- getMaxid : (a -> comparable) -> List a -> Maybe a
--- getMaxid field =
---     List.head << List.reverse << List.sortBy field
-
-
 getactiveTaskid : Model -> Id
 getactiveTaskid model =
     model.activeTask
         |> Maybe.withDefault (toId 0)
-
-
-
--- let
---     id =
---         case model.activeTask of
---             Maybe.Just a ->
---                 a
---
---             Nothing ->
---                 0
--- in
--- id
 
 
 toggleTask : TaskStatus -> TaskStatus
@@ -163,62 +109,6 @@ updateStatus index activetaskId item =
         item
 
 
-
--- Tasks
--- for each task if task id is passed id then toggle task status
--- if active task id is not task id then set active task to this task id
--- if active task id is task id then set active task to none
---
--- NameChange
--- let
---     oldActive =
---         model.activeTask
---
---     newActive =
---         case oldActive of
---             Just a ->
---                 { a | name = name }
---
---             Nothing ->
---                 let
---                     nextid =
---                         getMaxid model
---                 in
---                 { id = nextid + 1, status = Pause, name = name, estimate = 30, actual = 0 }
---
---     newModel =
---         { model | activeTask = Just newActive.id }
--- in
--- ( newModel, Cmd.none )
--- updateStatus tasklst =
---     task.id
--- updateStaus model id =
---     if model.id == id then
---         { model
---             | status =
---                 case model.mytask.status of
---                     Pause ->
---                         Start
---
---                     Start ->
---                         Pause
---
---                     Complete ->
---                         Start
---         }
---
---     else
---         model
--- getTask model id =
---     if model.id == id then
---         { task = model.task }
---
---     else
---         model
--- getActiveTaskName : Model -> Maybe.Maybe a
--- getActiveTaskName : Model -> Maybe.Maybe Id
-
-
 getNextid : Model -> Id
 getNextid model =
     List.map (\task -> idToInt task.id) model.mytasks
@@ -246,6 +136,94 @@ init =
     )
 
 
+
+-- loadFirebaseState : Model
+-- loadFirebaseState =
+--     let
+--         newModel =
+--             { mytasks = decodeTasks
+--             , newTaskName = ""
+--             , newTaskEstimate = 30
+--             , activeTask = 1
+--             }
+--     in
+--     newModel
+
+
+encodeTasks : List MyTask -> Encode.Value
+encodeTasks record =
+    Encode.list encodeTask record
+
+
+encodeTask : MyTask -> Encode.Value
+encodeTask record =
+    Encode.object
+        [ ( "actual", Encode.int <| record.actual )
+        , ( "estimate", Encode.int <| record.estimate )
+        , ( "id", Encode.int (idToInt record.id) )
+        , ( "name", Encode.string <| record.name )
+        , ( "status", encodeStatus <| record.status )
+        ]
+
+
+decodeTasks : Decoder (List MyTask)
+decodeTasks =
+    Decode.list decodeTask
+
+
+decodeTask : Decoder MyTask
+decodeTask =
+    Decode.succeed MyTask
+        |> required "id" (Decode.map toId Decode.int)
+        |> required "status" decodeStatus
+        |> required "name" Decode.string
+        |> required "estimate" Decode.int
+        |> required "actual" Decode.int
+
+
+encodeStatus : TaskStatus -> Encode.Value
+encodeStatus v =
+    case v of
+        Start ->
+            Encode.string "Start"
+
+        Pause ->
+            Encode.string "Pause"
+
+        Complete ->
+            Encode.string "Complete"
+
+
+decodeStatus : Decoder TaskStatus
+decodeStatus =
+    Decode.string
+        |> Decode.andThen
+            (\string ->
+                case string of
+                    "Start" ->
+                        Decode.succeed Start
+
+                    "Pause" ->
+                        Decode.succeed Pause
+
+                    "Complete" ->
+                        Decode.succeed Complete
+
+                    _ ->
+                        Decode.fail "Invalid Status"
+            )
+
+
+
+-- result : Result String MyTask
+-- result =
+--     Decode.decodeString
+--         decodeTask
+--         """
+--           {"id" : "1", "name" : "T1", "status" : "Pause", "estimate": 30, "actual": 0}
+--         """
+
+
 type Msg
     = None
     | AddTask
@@ -253,6 +231,7 @@ type Msg
     | OnEstimate String
     | TaskToggle Int
     | UpdateTask Time.Posix
+    | LoadFirebaseState (Result Decode.Error (List MyTask))
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -269,20 +248,8 @@ update message model =
         AddTask ->
             let
                 nextid =
-                    -- newid =
                     getNextid model
 
-                -- List.Extra.maximumBy .id model.mytask
-                --     |> Maybe.map (\task -> task.id)
-                --     |> Maybe.withDefault 1
-                -- nextid =
-                --     case newid of
-                --         Just a ->
-                --             a.id
-                --
-                --         Nothing ->
-                --             1
-                -- getMaxid .id model.mytask
                 newModel =
                     { model
                         | mytasks = model.mytasks ++ [ { id = nextid, status = Pause, name = model.newTaskName, estimate = model.newTaskEstimate, actual = 0 } ]
@@ -316,9 +283,6 @@ update message model =
                     List.map (updateStatus (toId id) (getactiveTaskid model))
                         model.mytasks
 
-                -- status =
-                --     List.map (setActiveTaskid id)
-                --         model.mytasks
                 newModel =
                     { model
                         | mytasks =
@@ -333,14 +297,32 @@ update message model =
                 increaseActual t =
                     { t
                         | actual =
-                            if t.status == Start then
-                                t.actual + 1
+                            case t.status of
+                                Start ->
+                                    t.actual + 1
 
-                            else
-                                t.actual
+                                _ ->
+                                    t.actual
                     }
             in
             ( { model | mytasks = List.map increaseActual model.mytasks }, Cmd.none )
+
+        LoadFirebaseState list ->
+            ( { model
+                | mytasks =
+                    case list of
+                        Ok value ->
+                            value
+
+                        Err error ->
+                            let
+                                _ =
+                                    Debug.log "GameStateChanged err" error
+                            in
+                            model.mytasks
+              }
+            , Cmd.none
+            )
 
 
 
@@ -418,7 +400,10 @@ myTasksView mytasks =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Time.every 600 UpdateTask
+    Sub.batch
+        [ Time.every 600 UpdateTask
+        , loadFirebaseState (LoadFirebaseState << Decode.decodeValue decodeTasks)
+        ]
 
 
 
