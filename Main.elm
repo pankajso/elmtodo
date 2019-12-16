@@ -2,6 +2,7 @@ module Main exposing (..)
 
 import Browser
 import Browser.Navigation
+import Dict exposing (Dict)
 import Html exposing (Html, button)
 import Html.Attributes as HA
 import Html.Events exposing (onClick, onInput)
@@ -61,7 +62,7 @@ type alias MyTask =
 
 
 type alias Model =
-    { mytasks : List MyTask
+    { mytasks : Dict String MyTask
     , activeTask : Maybe Id
     , newTaskName : String
     , newTaskEstimate : Int
@@ -87,11 +88,7 @@ toggleTask status =
             Start
 
 
-updateStatus :
-    a
-    -> a
-    -> { b | id : a, status : TaskStatus }
-    -> { b | id : a, status : TaskStatus }
+updateStatus : a -> a -> { b | id : a, status : TaskStatus } -> { b | id : a, status : TaskStatus }
 updateStatus index activetaskId item =
     if index == item.id then
         { item
@@ -109,9 +106,25 @@ updateStatus index activetaskId item =
         item
 
 
+updateDictFromList : List MyTask -> Dict String MyTask
+updateDictFromList tasklist =
+    let
+        ids =
+            List.map (\task -> ( String.fromInt (idToInt task.id), task )) tasklist
+
+        dict =
+            Dict.fromList ids
+    in
+    dict
+
+
+
+-- Dict.fromList [ ( 1, { id = toId 1, status = Pause, name = "T1", estimate = 30, actual = 0 } ) ]
+
+
 getNextid : Model -> Id
 getNextid model =
-    List.map (\task -> idToInt task.id) model.mytasks
+    List.map (\task -> idToInt task.id) (Dict.values model.mytasks)
         |> List.maximum
         |> Maybe.withDefault 0
         |> (+) 1
@@ -125,7 +138,7 @@ init =
             { id = toId 1, status = Pause, name = "T1", estimate = 30, actual = 0 }
 
         newModel =
-            { mytasks = newTask :: []
+            { mytasks = Dict.fromList [ ( String.fromInt (idToInt newTask.id), newTask ) ]
             , newTaskName = ""
             , newTaskEstimate = 30
             , activeTask = Just newTask.id
@@ -166,19 +179,28 @@ encodeTask record =
         ]
 
 
-decodeTasks : Decoder (List MyTask)
+decodeTasks : Decoder (Dict String MyTask)
 decodeTasks =
-    Decode.list decodeTask
+    Decode.dict decodeTask
 
 
 decodeTask : Decoder MyTask
 decodeTask =
     Decode.succeed MyTask
-        |> required "id" (Decode.map toId Decode.int)
-        |> required "status" decodeStatus
-        |> required "name" Decode.string
-        |> required "estimate" Decode.int
-        |> required "actual" Decode.int
+        |> optional "id" (Decode.map toId Decode.int) (toId 111)
+        |> optional "status" decodeStatus Start
+        |> optional "name" Decode.string "optionalName"
+        |> optional "estimate" Decode.int 0
+        |> optional "actual" Decode.int 0
+
+
+decodeModel : Decoder Model
+decodeModel =
+    Decode.map4 Model
+        (Decode.field "tasklist" decodeTasks)
+        (Decode.field "activeTask" (Decode.map toId Decode.int |> Decode.maybe))
+        (Decode.field "newTaskName" Decode.string)
+        (Decode.field "newTaskEstimate" Decode.int)
 
 
 encodeStatus : TaskStatus -> Encode.Value
@@ -231,7 +253,7 @@ type Msg
     | OnEstimate String
     | TaskToggle Int
     | UpdateTask Time.Posix
-    | LoadFirebaseState (Result Decode.Error (List MyTask))
+    | LoadFirebaseState (Result Decode.Error Model)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -250,15 +272,18 @@ update message model =
                 nextid =
                     getNextid model
 
+                newTask =
+                    { id = nextid, status = Pause, name = model.newTaskName, estimate = model.newTaskEstimate, actual = 0 }
+
                 newModel =
                     { model
-                        | mytasks = model.mytasks ++ [ { id = nextid, status = Pause, name = model.newTaskName, estimate = model.newTaskEstimate, actual = 0 } ]
+                        | mytasks = Dict.insert (String.fromInt (idToInt nextid)) newTask model.mytasks
                         , newTaskName = ""
                         , newTaskEstimate = 30
                         , activeTask = model.activeTask
                     }
             in
-            ( newModel, Cmd.none )
+            ( newModel, Encode.encode 0 (encodeTask newTask) |> sendNewTaskState )
 
         OnName name ->
             let
@@ -278,15 +303,16 @@ update message model =
 
         TaskToggle id ->
             let
-                status =
-                    -- updateStaus model id
-                    List.map (updateStatus (toId id) (getactiveTaskid model))
-                        model.mytasks
-
+                -- status =
+                --     -- updateStaus model id
+                --     List.map (updateStatus (toId id) (getactiveTaskid model))
+                --         (Dict.values
+                --             model.mytasks
+                --         )
                 newModel =
                     { model
-                        | mytasks =
-                            status
+                      -- | mytasks = updateDictFromList status
+                        | mytasks = Dict.update (String.fromInt id) (Maybe.map (updateStatus (toId id) (getactiveTaskid model))) model.mytasks
                         , activeTask = Just (toId id)
                     }
             in
@@ -305,11 +331,11 @@ update message model =
                                     t.actual
                     }
             in
-            ( { model | mytasks = List.map increaseActual model.mytasks }, Cmd.none )
+            ( { model | mytasks = updateDictFromList (List.map increaseActual (Dict.values model.mytasks)) }, Cmd.none )
 
         LoadFirebaseState list ->
-            ( { model
-                | mytasks =
+            let
+                newModel =
                     case list of
                         Ok value ->
                             value
@@ -317,15 +343,29 @@ update message model =
                         Err error ->
                             let
                                 _ =
-                                    Debug.log "GameStateChanged err" error
+                                    Debug.log " LoadFirebaseState err" error
                             in
-                            model.mytasks
-              }
-            , Cmd.none
-            )
+                            model
+            in
+            ( newModel, Cmd.none )
 
 
 
+-- ( { model
+--     | mytasks =
+--         case list of
+--             Ok value ->
+--                 value
+--
+--             Err error ->
+--                 let
+--                     _ =
+--                         Debug.log " LoadFirebaseState err" error
+--                 in
+--                 model.mytasks
+--   }
+-- , Cmd.none
+-- )
 ---- VIEW ----
 
 
@@ -341,7 +381,7 @@ view model =
                     , Html.th [] [ Html.text "Actual" ]
                     ]
                  ]
-                    ++ myTasksView model.mytasks
+                    ++ myTasksView (Dict.values model.mytasks)
                 )
             ]
         , Html.div []
@@ -402,7 +442,7 @@ subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
         [ Time.every 600 UpdateTask
-        , loadFirebaseState (LoadFirebaseState << Decode.decodeValue decodeTasks)
+        , loadFirebaseState (LoadFirebaseState << Decode.decodeValue decodeModel)
         ]
 
 

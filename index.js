@@ -17,13 +17,32 @@ function load()
       // Initialize Firebase
       firebase.initializeApp(firebaseConfig);
 
-      const database = firebase.database().ref('tasklist/');
+      const database = firebase.database().ref();
       database.on("value", function(snapshot){
         // console.log(snapshot.val());
         const json = snapshot.val()
         console.log("json: ", json)
         app.ports.loadFirebaseState.send(json)
       });
+      // listen(database);
       console.log("aaaaa");
 }
 load();
+
+
+app.ports.sendNewTaskState.subscribe(str => {
+        console.log("1111");
+        console.log(str)
+        writeNewTask(str);
+        console.log("2222");
+    })
+
+function writeNewTask(task) {
+    // A Task entry.
+    var taskData = JSON.parse(task)
+    var newKey = taskData.id
+    // Write the new task's data in the task list
+    var updates = {};
+    updates['/tasklist/'] = taskData;
+    return firebase.database().ref().child('tasklist').push(taskData);
+}
