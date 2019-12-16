@@ -309,10 +309,18 @@ update message model =
                 --         (Dict.values
                 --             model.mytasks
                 --         )
+                activeTaskid =
+                    getactiveTaskid model
+
+                toggleTask2 =
+                    Maybe.map (updateStatus (toId id) activeTaskid)
+
                 newModel =
                     { model
-                      -- | mytasks = updateDictFromList status
-                        | mytasks = Dict.update (String.fromInt id) (Maybe.map (updateStatus (toId id) (getactiveTaskid model))) model.mytasks
+                        | mytasks =
+                            model.mytasks
+                                |> Dict.update (String.fromInt id) toggleTask2
+                                |> Dict.update (activeTaskid |> idToInt |> String.fromInt) toggleTask2
                         , activeTask = Just (toId id)
                     }
             in
