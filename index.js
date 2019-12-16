@@ -31,10 +31,7 @@ load();
 
 
 app.ports.sendNewTaskState.subscribe(str => {
-        console.log("1111");
-        console.log(str)
         writeNewTask(str);
-        console.log("2222");
     })
 
 function writeNewTask(task) {
