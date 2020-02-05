@@ -1,6 +1,7 @@
 import { Elm } from './Main.elm'
 import './main.css'
 import firebase from "firebase"
+import gun from "gun"
 
 
 const app = Elm.Main.init({

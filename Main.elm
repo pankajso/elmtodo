@@ -108,14 +108,8 @@ updateStatus index activetaskId item =
 
 updateDictFromList : List MyTask -> Dict String MyTask
 updateDictFromList tasklist =
-    let
-        ids =
-            List.map (\task -> ( String.fromInt (idToInt task.id), task )) tasklist
-
-        dict =
-            Dict.fromList ids
-    in
-    dict
+    List.map (\task -> ( String.fromInt (idToInt task.id), task )) tasklist
+        |> Dict.fromList
 
 
 
