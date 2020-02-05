@@ -8,6 +8,7 @@
     "node-elm-compiler": "^5.0.4"
   },
   "dependencies": {
-    "firebase": "^7.5.2"
+    "firebase": "^7.5.2",
+    "gun": "^0.2020.116"
   }
 }
