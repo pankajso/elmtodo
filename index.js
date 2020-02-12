@@ -35,14 +35,14 @@ const app = Elm.Main.init({
 function loadGun() {
     var gun = Gun(['http://localhost:8765/gun']);
     var tododata = {}
-    gun.get('tododataa').on(function(todo, id) {
+    gun.get('tododatab').on(function(todo, id) {
 
         tododata["newTaskName"] = todo.newTaskName
         tododata["newTaskEstimate"] = todo.newTaskEstimate
         tododata["activeTask"] = todo.activeTask
 
         var tlist = {}
-        gun.get('tododataa').get('tasklist').map().on(function(task, id) {
+        gun.get('tododatab').get('tasklist').map().on(function(task, id) {
 
             var data = {
                 "id": task.id,
@@ -67,11 +67,17 @@ app.ports.sendNewTaskState.subscribe(str => {
 
 function writeNewTask(task) {
     // A Task entry.
+    var gun = Gun(['http://localhost:8765/gun']);
     var taskData = JSON.parse(task)
     var newKey = taskData.id
     // Write the new task's data in the task list
-    var updates = {};
-    updates['/tasklist/'] = taskData;
+    var tlist = {}
+    var uniqid = Date.now();
+    tlist[uniqid] = taskData
+    // var updates = {};
+    // updates['/tasklist/'] = taskData;
     console.log(taskData);
+    var tl = gun.get('tododatab').get('tasklist');
+    tl.put(tlist);
     // return firebase.database().ref().child('tasklist').push(taskData);
 }
