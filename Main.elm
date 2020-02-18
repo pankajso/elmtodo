@@ -7,7 +7,7 @@ import Html exposing (Html, button)
 import Html.Attributes as HA
 import Html.Events exposing (onClick, onInput)
 import Json.Decode as Decode exposing (..)
-import Json.Decode.Pipeline exposing (optional, required)
+import Json.Decode.Pipeline as JDP
 import Json.Encode as Encode exposing (..)
 import List.Extra
 import Ports exposing (..)
@@ -143,103 +143,6 @@ init =
     )
 
 
-
--- loadFirebaseState : Model
--- loadFirebaseState =
---     let
---         newModel =
---             { mytasks = decodeTasks
---             , newTaskName = ""
---             , newTaskEstimate = 30
---             , activeTask = 1
---             }
---     in
---     newModel
-
-
-encodeTasks : List MyTask -> Encode.Value
-encodeTasks record =
-    Encode.list encodeTask record
-
-
-encodeTask : MyTask -> Encode.Value
-encodeTask record =
-    Encode.object
-        [ ( "actual", Encode.int <| record.actual )
-        , ( "estimate", Encode.int <| record.estimate )
-        , ( "id", Encode.int (idToInt record.id) )
-        , ( "name", Encode.string <| record.name )
-        , ( "status", encodeStatus <| record.status )
-        ]
-
-
-decodeTasks : Decoder (Dict String MyTask)
-decodeTasks =
-    Decode.dict decodeTask
-
-
-decodeTask : Decoder MyTask
-decodeTask =
-    Decode.succeed MyTask
-        |> optional "id" (Decode.map toId Decode.int) (toId 111)
-        |> optional "status" decodeStatus Start
-        |> optional "name" Decode.string "optionalName"
-        |> optional "estimate" Decode.int 0
-        |> optional "actual" Decode.int 0
-
-
-decodeModel : Decoder Model
-decodeModel =
-    Decode.map4 Model
-        (Decode.field "tasklist" decodeTasks)
-        (Decode.field "activeTask" (Decode.map toId Decode.int |> Decode.maybe))
-        (Decode.field "newTaskName" Decode.string)
-        (Decode.field "newTaskEstimate" Decode.int)
-
-
-encodeStatus : TaskStatus -> Encode.Value
-encodeStatus v =
-    case v of
-        Start ->
-            Encode.string "Start"
-
-        Pause ->
-            Encode.string "Pause"
-
-        Complete ->
-            Encode.string "Complete"
-
-
-decodeStatus : Decoder TaskStatus
-decodeStatus =
-    Decode.string
-        |> Decode.andThen
-            (\string ->
-                case string of
-                    "Start" ->
-                        Decode.succeed Start
-
-                    "Pause" ->
-                        Decode.succeed Pause
-
-                    "Complete" ->
-                        Decode.succeed Complete
-
-                    _ ->
-                        Decode.fail "Invalid Status"
-            )
-
-
-
--- result : Result String MyTask
--- result =
---     Decode.decodeString
---         decodeTask
---         """
---           {"id" : "1", "name" : "T1", "status" : "Pause", "estimate": 30, "actual": 0}
---         """
-
-
 type Msg
     = None
     | AddTask
@@ -332,9 +235,26 @@ update message model =
                                 _ ->
                                     t.actual
                     }
-            in
-            ( { model | mytasks = updateDictFromList (List.map increaseActual (Dict.values model.mytasks)) }, Cmd.none )
 
+                newModel =
+                    { model
+                        | mytasks =
+                            updateDictFromList (List.map increaseActual (Dict.values model.mytasks))
+                    }
+
+                job =
+                    newModel.mytasks
+                        |> Dict.filter (\k v -> v.status == Start)
+                        |> Dict.values
+                        |> List.head
+                        |> Maybe.map (\x -> Encode.encode 2 (encodeTask x) |> updateTaskState)
+                        |> Maybe.withDefault Cmd.none
+            in
+            ( newModel
+            , job
+            )
+
+        --
         LoadFirebaseState list ->
             let
                 newModel =
@@ -443,7 +363,7 @@ myTasksView mytasks =
 subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
-        [ Time.every 600 UpdateTask
+        [ Time.every 6000 UpdateTask
         , loadFirebaseState (LoadFirebaseState << Decode.decodeValue decodeModel)
         ]
 
@@ -462,3 +382,100 @@ main =
         , subscriptions = subscriptions
         , view = view
         }
+
+
+
+-- loadFirebaseState : Model
+-- loadFirebaseState =
+--     let
+--         newModel =
+--             { mytasks = decodeTasks
+--             , newTaskName = ""
+--             , newTaskEstimate = 30
+--             , activeTask = 1
+--             }
+--     in
+--     newModel
+
+
+encodeTasks : List MyTask -> Encode.Value
+encodeTasks record =
+    Encode.list encodeTask record
+
+
+encodeTask : MyTask -> Encode.Value
+encodeTask record =
+    Encode.object
+        [ ( "actual", Encode.int <| record.actual )
+        , ( "estimate", Encode.int <| record.estimate )
+        , ( "id", Encode.int (idToInt record.id) )
+        , ( "name", Encode.string <| record.name )
+        , ( "status", encodeStatus <| record.status )
+        ]
+
+
+decodeTasks : Decoder (Dict String MyTask)
+decodeTasks =
+    Decode.dict decodeTask
+
+
+decodeTask : Decoder MyTask
+decodeTask =
+    Decode.succeed MyTask
+        |> JDP.required "id" (Decode.map toId Decode.int)
+        |> JDP.required "status" decodeStatus
+        |> JDP.required "name" Decode.string
+        |> JDP.required "estimate" Decode.int
+        |> JDP.required "actual" Decode.int
+
+
+decodeModel : Decoder Model
+decodeModel =
+    Decode.map4 Model
+        (Decode.field "tasklist" decodeTasks)
+        (Decode.field "activeTask" (Decode.map toId Decode.int |> Decode.maybe))
+        (Decode.field "newTaskName" Decode.string)
+        (Decode.field "newTaskEstimate" Decode.int)
+
+
+encodeStatus : TaskStatus -> Encode.Value
+encodeStatus v =
+    case v of
+        Start ->
+            Encode.string "Start"
+
+        Pause ->
+            Encode.string "Pause"
+
+        Complete ->
+            Encode.string "Complete"
+
+
+decodeStatus : Decoder TaskStatus
+decodeStatus =
+    Decode.string
+        |> Decode.andThen
+            (\string ->
+                case string of
+                    "Start" ->
+                        Decode.succeed Start
+
+                    "Pause" ->
+                        Decode.succeed Pause
+
+                    "Complete" ->
+                        Decode.succeed Complete
+
+                    _ ->
+                        Decode.fail "Invalid Status"
+            )
+
+
+
+-- result : Result String MyTask
+-- result =
+--     Decode.decodeString
+--         decodeTask
+--         """
+--           {"id" : "1", "name" : "T1", "status" : "Pause", "estimate": 30, "actual": 0}
+--         """

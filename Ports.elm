@@ -7,3 +7,6 @@ port loadFirebaseState : (Decode.Value -> msg) -> Sub msg
 
 
 port sendNewTaskState : String -> Cmd msg
+
+
+port updateTaskState : String -> Cmd msg
