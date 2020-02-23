@@ -11,6 +11,7 @@ import Json.Decode.Pipeline as JDP
 import Json.Encode as Encode exposing (..)
 import List.Extra
 import Ports exposing (..)
+import String exposing (fromInt)
 import Time
 
 
@@ -33,16 +34,21 @@ type TaskStatus
 
 
 type Id
-    = TaskId Int
+    = TaskId String
 
 
-toId : Int -> Id
+toId : String -> Id
 toId x =
     TaskId x
 
 
 idToInt : Id -> Int
 idToInt (TaskId x) =
+    String.toInt x |> Maybe.withDefault 0
+
+
+idToString : Id -> String
+idToString (TaskId x) =
     x
 
 
@@ -72,7 +78,7 @@ type alias Model =
 getactiveTaskid : Model -> Id
 getactiveTaskid model =
     model.activeTask
-        |> Maybe.withDefault (toId 0)
+        |> Maybe.withDefault (toId "0")
 
 
 toggleTask : TaskStatus -> TaskStatus
@@ -106,33 +112,32 @@ updateStatus index activetaskId item =
         item
 
 
-updateDictFromList : List MyTask -> Dict String MyTask
-updateDictFromList tasklist =
-    List.map (\task -> ( String.fromInt (idToInt task.id), task )) tasklist
-        |> Dict.fromList
 
-
-
+--
+-- updateDictFromList : List MyTask -> Dict String MyTask
+-- updateDictFromList tasklist =
+--     List.map (\task -> ( String.fromInt (idToInt task.id), task )) tasklist
+--         |> Dict.fromList
 -- Dict.fromList [ ( 1, { id = toId 1, status = Pause, name = "T1", estimate = 30, actual = 0 } ) ]
 
 
-getNextid : Model -> Id
+getNextid : Model -> String
 getNextid model =
     List.map (\task -> idToInt task.id) (Dict.values model.mytasks)
         |> List.maximum
         |> Maybe.withDefault 0
         |> (+) 1
-        |> toId
+        |> String.fromInt
 
 
 init : ( Model, Cmd Msg )
 init =
     let
         newTask =
-            { id = toId 1, status = Pause, name = "T1", estimate = 30, actual = 0 }
+            { id = toId "1", status = Pause, name = "T1", estimate = 30, actual = 0 }
 
         newModel =
-            { mytasks = Dict.fromList [ ( String.fromInt (idToInt newTask.id), newTask ) ]
+            { mytasks = Dict.fromList [ ( idToString newTask.id, newTask ) ]
             , newTaskName = ""
             , newTaskEstimate = 30
             , activeTask = Just newTask.id
@@ -148,7 +153,7 @@ type Msg
     | AddTask
     | OnName String
     | OnEstimate String
-    | TaskToggle Int
+    | TaskToggle String
     | UpdateTask Time.Posix
     | LoadFirebaseState (Result Decode.Error Model)
 
@@ -170,11 +175,11 @@ update message model =
                     getNextid model
 
                 newTask =
-                    { id = nextid, status = Pause, name = model.newTaskName, estimate = model.newTaskEstimate, actual = 0 }
+                    { id = toId nextid, status = Pause, name = model.newTaskName, estimate = model.newTaskEstimate, actual = 0 }
 
                 newModel =
                     { model
-                        | mytasks = Dict.insert (String.fromInt (idToInt nextid)) newTask model.mytasks
+                        | mytasks = Dict.insert nextid newTask model.mytasks
                         , newTaskName = ""
                         , newTaskEstimate = 30
                         , activeTask = model.activeTask
@@ -216,7 +221,7 @@ update message model =
                     { model
                         | mytasks =
                             model.mytasks
-                                |> Dict.update (String.fromInt id) toggleTask2
+                                |> Dict.update id toggleTask2
                                 |> Dict.update (activeTaskid |> idToInt |> String.fromInt) toggleTask2
                         , activeTask = Just (toId id)
                     }
@@ -239,7 +244,9 @@ update message model =
                 newModel =
                     { model
                         | mytasks =
-                            updateDictFromList (List.map increaseActual (Dict.values model.mytasks))
+                            -- updateDictFromList (List.map increaseActual (Dict.values model.mytasks))
+                            -- TODO; use Dict.update
+                            Dict.empty
                     }
 
                 job =
@@ -337,10 +344,10 @@ view model =
 taskView : MyTask -> Html Msg
 taskView mytask =
     Html.tr []
-        [ Html.td [] [ Html.text (String.fromInt (idToInt mytask.id)) ]
+        [ Html.td [] [ Html.text (idToString mytask.id) ]
         , Html.td [] [ Html.text mytask.name ]
         , Html.td []
-            [ Html.button [ onClick (TaskToggle (idToInt mytask.id)) ]
+            [ Html.button [ onClick (TaskToggle (idToString mytask.id)) ]
                 [ Html.text
                     (if not (mytask.status == Start) then
                         "Start"
@@ -408,7 +415,7 @@ encodeTask record =
     Encode.object
         [ ( "actual", Encode.int <| record.actual )
         , ( "estimate", Encode.int <| record.estimate )
-        , ( "id", Encode.int (idToInt record.id) )
+        , ( "id", Encode.string (idToString record.id) )
         , ( "name", Encode.string <| record.name )
         , ( "status", encodeStatus <| record.status )
         ]
@@ -422,7 +429,7 @@ decodeTasks =
 decodeTask : Decoder MyTask
 decodeTask =
     Decode.succeed MyTask
-        |> JDP.required "id" (Decode.map toId Decode.int)
+        |> JDP.required "id" (Decode.map toId Decode.string)
         |> JDP.required "status" decodeStatus
         |> JDP.required "name" Decode.string
         |> JDP.required "estimate" Decode.int
@@ -433,7 +440,7 @@ decodeModel : Decoder Model
 decodeModel =
     Decode.map4 Model
         (Decode.field "tasklist" decodeTasks)
-        (Decode.field "activeTask" (Decode.map toId Decode.int |> Decode.maybe))
+        (Decode.field "activeTask" (Decode.map toId Decode.string |> Decode.maybe))
         (Decode.field "newTaskName" Decode.string)
         (Decode.field "newTaskEstimate" Decode.int)
 
