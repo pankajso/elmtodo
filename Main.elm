@@ -112,12 +112,13 @@ updateStatus index activetaskId item =
         item
 
 
+updateDictFromList : List MyTask -> Dict String MyTask
+updateDictFromList tasklist =
+    List.map (\task -> ( String.fromInt (idToInt task.id), task )) tasklist
+        |> Dict.fromList
 
---
--- updateDictFromList : List MyTask -> Dict String MyTask
--- updateDictFromList tasklist =
---     List.map (\task -> ( String.fromInt (idToInt task.id), task )) tasklist
---         |> Dict.fromList
+
+
 -- Dict.fromList [ ( 1, { id = toId 1, status = Pause, name = "T1", estimate = 30, actual = 0 } ) ]
 
 
@@ -244,12 +245,16 @@ update message model =
                 newModel =
                     { model
                         | mytasks =
-                            -- updateDictFromList (List.map increaseActual (Dict.values model.mytasks))
-                            -- TODO; use Dict.update
-                            Dict.empty
+                            updateDictFromList (List.map increaseActual (Dict.values model.mytasks))
+
+                        -- TODO; use Dict.update
+                        -- Dict.update comparable (Maybe.Maybe v -> Maybe.Maybe v) (Dict.Dict comparable v)
                     }
 
-                job =
+                -- key
+                -- updateTask : Maybe MyTask -> Maybe MyTask
+                -- model.mytasks
+                cmd =
                     newModel.mytasks
                         |> Dict.filter (\k v -> v.status == Start)
                         |> Dict.values
@@ -257,9 +262,7 @@ update message model =
                         |> Maybe.map (\x -> Encode.encode 2 (encodeTask x) |> updateTaskState)
                         |> Maybe.withDefault Cmd.none
             in
-            ( newModel
-            , job
-            )
+            ( newModel, cmd )
 
         --
         LoadFirebaseState list ->

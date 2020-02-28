@@ -15,14 +15,14 @@ let gundb = Gun(['http://localhost:8765/gun']);
 function loadGun() {
 
   var tododata = {}
-  gundb.get('tododatab').on(function(todo, id) {
+  gundb.get('tododatag').on(function(todo, id) {
 
     tododata["newTaskName"] = todo.newTaskName
     tododata["newTaskEstimate"] = todo.newTaskEstimate
     tododata["activeTask"] = todo.activeTask
 
     var tlist = {}
-    gundb.get('tododatab').get('tasklist').map().on(function(task, id) {
+    gundb.get('tododatag').get('tasklist').map().on(function(task, id) {
 
       var data = {
         "id": task.id,
@@ -55,12 +55,12 @@ function writeNewTask(task) {
   var newKey = taskData.id
   // Write the new task's data in the task list
   var tlist = {}
-  var uniqid = Date.now();
-  tlist[uniqid] = taskData
+  // var uniqid = Date.now();
+  tlist[taskData.id] = taskData
   // var updates = {};
   // updates['/tasklist/'] = taskData;
   console.log(taskData);
-  var tl = gundb.get('tododatab').get('tasklist');
+  var tl = gundb.get('tododatag').get('tasklist');
   tl.put(tlist);
 }
 
@@ -73,7 +73,7 @@ function updateTaskState(newtask_) {
   const newtask = JSON.parse(newtask_)
   console.log(newtask_, newtask)
 
-  gundb.get('tododatab').get('tasklist').map().once((task, id) => {
+  gundb.get('tododatag').get('tasklist').map().once((task, id) => {
     if (task.id == newtask.id){
       var data = {
         "id": task.id,
@@ -83,7 +83,7 @@ function updateTaskState(newtask_) {
         "status": newtask.status
       }
       tlist[id] = data
-      var tl = gundb.get('tododatab').get('tasklist');
+      var tl = gundb.get('tododatag').get('tasklist');
       tl.put(tlist);
     }
   })
