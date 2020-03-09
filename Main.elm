@@ -231,26 +231,50 @@ update message model =
 
         UpdateTask time ->
             let
-                increaseActual t =
-                    { t
-                        | actual =
-                            case t.status of
-                                Start ->
-                                    t.actual + 1
+                -- _ =
+                --     Debug.log "mytasks" model.mytasks
+                -- increaseActual t =
+                --     { t
+                --         | actual =
+                --             case t.status of
+                --                 Start ->
+                --                     t.actual + 1
+                --
+                --                 _ ->
+                --                     t.actual
+                --     }
+                increaseActual n =
+                    n + 1
 
-                                _ ->
-                                    t.actual
-                    }
+                activeTaskid =
+                    getactiveTaskid model |> idToString
 
-                newModel =
+                updatedTask =
                     { model
-                        | mytasks =
-                            updateDictFromList (List.map increaseActual (Dict.values model.mytasks))
-
-                        -- TODO; use Dict.update
-                        -- Dict.update comparable (Maybe.Maybe v -> Maybe.Maybe v) (Dict.Dict comparable v)
+                        | mytasks = Dict.update activeTaskid f model.mytasks |> Debug.log "mytasks"
                     }
 
+                -- Maybe.map act o |> Maybe.withDefault -1
+                act x =
+                    { x | actual = x.actual + 1 }
+
+                f mb =
+                    Maybe.map act mb
+
+                -- increaseActual =
+                --     Maybe.map (\data -> { data | actual = actual + 1 })
+                -- updatedTask =
+                --     Dict.update activeTaskid actual model.mytasks
+                newModel =
+                    updatedTask
+
+                -- { model
+                --     | mytasks =
+                --         -- updateDictFromList (List.map increaseActual (Dict.values model.mytasks))
+                --         -- TODO; use Dict.update
+                --         -- Dict.update comparable (Maybe.Maybe v -> Maybe.Maybe v) (Dict.Dict comparable v)
+                --         Dict.empty
+                -- }
                 -- key
                 -- updateTask : Maybe MyTask -> Maybe MyTask
                 -- model.mytasks
