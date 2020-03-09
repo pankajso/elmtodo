@@ -52,7 +52,7 @@ app.ports.updateTaskState.subscribe(str => {
 function writeNewTask(task) {
   // A Task entry.
   var taskData = JSON.parse(task)
-  var newKey = taskData.id
+  // var newKey = taskData.id
   // Write the new task's data in the task list
   var tlist = {}
   // var uniqid = Date.now();
@@ -71,7 +71,7 @@ function updateTaskState(newtask_) {
   var tlist = {}
 
   const newtask = JSON.parse(newtask_)
-  console.log(newtask_, newtask)
+  console.log("newtask_ = ", newtask)
 
   gundb.get('tododatag').get('tasklist').map().once((task, id) => {
     if (task.id == newtask.id){
@@ -85,6 +85,9 @@ function updateTaskState(newtask_) {
       tlist[id] = data
       var tl = gundb.get('tododatag').get('tasklist');
       tl.put(tlist);
+      let tododata = {}
+      tododata = gundb.get('tododatag').put({ activeTask: task.id })
+      // tododata["activeTask"] = task.id
     }
   })
 }
